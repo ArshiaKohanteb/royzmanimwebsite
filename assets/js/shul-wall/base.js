@@ -40,17 +40,18 @@ const scheduleSettings = JSON.parse(document.getElementById("zy-scheduleScreen-c
 const glArgs = Object.values(scheduleSettings.location)
 const geoLocation = new GeoLocation(...glArgs);
 
+// ─── Frozen constants (kept for any existing consumers) ───
 const currentZDT = Temporal.Now.zonedDateTimeISO(scheduleSettings.location.timezone);
 
 const jCal = new WebsiteLimudCalendar(currentZDT.toPlainDate());
 jCal.setInIsrael((geoLocation.getLocationName() || "").toLowerCase().includes('israel'))
 
 const zmanCalc = new ZemanFunctions(geoLocation, {
-	elevation: jCal.getInIsrael(),
-	rtKulah: scheduleSettings.calendarToggle.rtKulah,
-	candleLighting: scheduleSettings.customTimes.candleLighting,
-	fixedMil: scheduleSettings.calendarToggle.forceSunSeasonal || jCal.getInIsrael(),
-	melakha: scheduleSettings.customTimes.tzeithIssurMelakha
+    elevation: jCal.getInIsrael(),
+    rtKulah: scheduleSettings.calendarToggle.rtKulah,
+    candleLighting: scheduleSettings.customTimes.candleLighting,
+    fixedMil: scheduleSettings.calendarToggle.forceSunSeasonal || jCal.getInIsrael(),
+    melakha: scheduleSettings.customTimes.tzeithIssurMelakha
 })
 zmanCalc.setDate(currentZDT.toPlainDate());
 
@@ -60,7 +61,6 @@ if (typeof localStorage !== "undefined" && localStorage.getItem('ctNetz') && isV
     const ctNetz = JSON.parse(localStorage.getItem('ctNetz'))
     if ('url' in ctNetz) {
         const ctNetzLink = new URL(ctNetz.url);
-
         if (ctNetzLink.searchParams.get('cgi_eroslatitude') == geoLocation.getLatitude().toFixed(6)
         && ctNetzLink.searchParams.get('cgi_eroslongitude') == (-geoLocation.getLongitude()).toFixed(6))
             availableVS = ctNetz.times
@@ -75,7 +75,37 @@ const dtF = [scheduleSettings.language == 'hb' ? 'he' : 'en', {
     minute: '2-digit'
 }];
 
-export { scheduleSettings, geoLocation, currentZDT, jCal, zmanCalc, dtF };
+// ─── Live getter functions for bridge.js recalculation ───
+// Each call builds fresh objects based on the current wall-clock time,
+// so zmanim update correctly after midnight without a page reload.
+
+function getCurrentZDT() {
+    return Temporal.Now.zonedDateTimeISO(scheduleSettings.location.timezone);
+}
+
+function getJCal() {
+    const now = getCurrentZDT();
+    const cal = new WebsiteLimudCalendar(now.toPlainDate());
+    cal.setInIsrael((geoLocation.getLocationName() || "").toLowerCase().includes('israel'));
+    return cal;
+}
+
+function getZmanCalc() {
+    const now = getCurrentZDT();
+    const cal = getJCal();
+    const calc = new ZemanFunctions(geoLocation, {
+        elevation: cal.getInIsrael(),
+        rtKulah: scheduleSettings.calendarToggle.rtKulah,
+        candleLighting: scheduleSettings.customTimes.candleLighting,
+        fixedMil: scheduleSettings.calendarToggle.forceSunSeasonal || cal.getInIsrael(),
+        melakha: scheduleSettings.customTimes.tzeithIssurMelakha
+    });
+    calc.setDate(now.toPlainDate());
+    calc.setVisualSunrise(availableVS);
+    return calc;
+}
+
+export { scheduleSettings, geoLocation, currentZDT, jCal, zmanCalc, dtF, getCurrentZDT, getJCal, getZmanCalc };
 
 /**
  * @param {string} str
